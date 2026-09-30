@@ -2960,3 +2960,8 @@ input[type="number"]::-webkit-outer-spin-button {
     .customerMap { height: 190px; }
     .customerDirectionsBtn { width: 100%; }
 }
+
+/* Split payment */
+.billingPaymentRow { align-items: center; }
+.splitPaymentFields { display: contents; }
+#editDrinkStock[readonly] { opacity: .7; cursor: not-allowed; }
