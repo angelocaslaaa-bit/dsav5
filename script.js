@@ -535,79 +535,17 @@ function minutesToHM(minutes) {
 }
 
 function timeToMinutes(time) {
-    const parts =
-        time.split(":").map(Number);
-    return (
-        parts[0] * 60 +
-        parts[1]
-    );
+    const parts = time.split(":");
+    const hour = Number(parts[0]);
+    const minute = Number(parts[1]);
+    return hour * 60 + minute;
 }
 
 /* =========================================================
-   BUSINESS HOURS
-   Monday-Friday: 11:00 AM to 12:00 AM
-   Saturday-Sunday: 11:00 AM to 2:00 AM the next day
+   OPEN-TIME SCHEDULING
+   No opening or closing restriction. Any clock time is valid.
 ========================================================= */
-const OPENING_MINUTES = 11 * 60;
-const WEEKDAY_CLOSING_MINUTES = 24 * 60;
-const WEEKEND_CLOSING_MINUTES = 26 * 60;
-
-function getBusinessDate(dateString) {
-    if (dateString) {
-        const date = new Date(`${dateString}T12:00:00`);
-        if (!Number.isNaN(date.getTime())) return date;
-    }
-    return new Date();
-}
-
-function isWeekendDay(date) {
-    const day = date.getDay();
-    return day === 0 || day === 6;
-}
-
 function validateBusinessHours(startTime, durationMinutes, dateString) {
-    const date = getBusinessDate(dateString);
-    const startMinutes = timeToMinutes(startTime);
-    const duration = Number(durationMinutes || 0);
-
-    // 12:00 AM-1:59 AM is allowed only when the previous day was Saturday or Sunday.
-    if (startMinutes < 2 * 60) {
-        const previousDay = new Date(date);
-        previousDay.setDate(previousDay.getDate() - 1);
-        if (!isWeekendDay(previousDay)) {
-            return {
-                valid: false,
-                message: "The hall opens at 11:00 AM."
-            };
-        }
-        if (startMinutes + duration > 2 * 60) {
-            return {
-                valid: false,
-                message: "Weekend sessions can only run until 2:00 AM. Please choose a shorter duration."
-            };
-        }
-        return { valid: true };
-    }
-
-    if (startMinutes < OPENING_MINUTES) {
-        return {
-            valid: false,
-            message: "The hall opens at 11:00 AM."
-        };
-    }
-
-    const closingMinutes = isWeekendDay(date)
-        ? WEEKEND_CLOSING_MINUTES
-        : WEEKDAY_CLOSING_MINUTES;
-    const endMinutes = startMinutes + duration;
-    const closingLabel = isWeekendDay(date) ? "2:00 AM" : "12:00 AM";
-
-    if (endMinutes > closingMinutes) {
-        return {
-            valid: false,
-            message: `This duration goes beyond the ${closingLabel} closing time. Please choose a shorter duration.`
-        };
-    }
     return { valid: true };
 }
 
@@ -622,25 +560,6 @@ function getLocalDateString(date = new Date()) {
         pad2(date.getMonth() + 1) + "-" +
         pad2(date.getDate())
     );
-}
-
-function getSessionClosingTime(session) {
-    const start = new Date(session.actualStart);
-    const closing = new Date(start);
-
-    // After-midnight hours belong to the previous weekend operating day.
-    if (start.getHours() < 2) {
-        const previousDay = new Date(start);
-        previousDay.setDate(previousDay.getDate() - 1);
-        if (isWeekendDay(previousDay)) {
-            closing.setHours(2, 0, 0, 0);
-            return closing;
-        }
-    }
-
-    closing.setDate(closing.getDate() + 1);
-    closing.setHours(isWeekendDay(start) ? 2 : 0, 0, 0, 0);
-    return closing;
 }
 
 function overlaps(
@@ -1594,12 +1513,22 @@ function renderStaff() {
     }
 }
 
+function manualSelectHasValue(selectElement, targetValue) {
+    if (!selectElement) return false;
+    for (let i = 0; i < selectElement.options.length; i++) {
+        if (selectElement.options[i].value === targetValue) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* =========================================================
    NAVIGATION
 ========================================================= */
 function showTab(tabName) {
     if (
-        ["staff", "expenses", "sales-report"].includes(tabName) &&
+        (tabName === "staff" || tabName === "expenses" || tabName === "sales-report") &&
         !requireAdmin()
     ) {
         return;
@@ -2472,12 +2401,7 @@ function populateFacilitySelect(
             }
         );
     if (
-        [...select.options]
-            .some(
-                option =>
-                    option.value ===
-                    previousValue
-            )
+        manualSelectHasValue(select, previousValue)
     ) {
         select.value =
             previousValue;
@@ -3622,14 +3546,6 @@ function handleExtendSession(
             +
             minutes * 60000
         );
-    const closingTime =
-        getSessionClosingTime(session);
-    if (newEnd > closingTime) {
-        alert(
-            `Cannot extend this session. Snooker's Billiard Hall closes at ${formatTime12(pad2(closingTime.getHours()) + ":" + pad2(closingTime.getMinutes()))}.`
-        );
-        return;
-    }
     const conflict =
         manualFind(reservations, 
             reservation => {
@@ -3798,12 +3714,7 @@ function populateCategorySelects() {
                 }
             );
             if (
-                [...select.options]
-                    .some(
-                        option =>
-                            option.value ===
-                            previous
-                    )
+                manualSelectHasValue(select, previous)
             ) {
                 select.value =
                     previous;
@@ -4081,20 +3992,10 @@ async function handleEditDrink() {
                 )
                 .value
         );
-    const stock =
-        parseInt(
-            document
-                .getElementById(
-                    "editDrinkStock"
-                )
-                .value
-        );
     if (
         !name ||
         isNaN(price) ||
-        isNaN(stock) ||
-        price < 0 ||
-        stock < 0
+        price < 0
     ) {
         showMsg(
             "editDrinkMsg",
@@ -4123,8 +4024,6 @@ async function handleEditDrink() {
     drink.freeSnacks = categoryHasFreeSnack(category) ? selectedSnackValues("editDrinkSnacks") : [];
     drink.price =
         price;
-    drink.stock =
-        stock;
     syncDrinkStatus(
         drink
     );
@@ -4245,12 +4144,7 @@ function populateDrinkSelect() {
                 }
             );
             if (
-                [...select.options]
-                    .some(
-                        option =>
-                            option.value ===
-                            previous
-                    )
+                manualSelectHasValue(select, previous)
             ) {
                 select.value =
                     previous;
@@ -4321,12 +4215,7 @@ function populateDrinkOrderTargetSelect() {
         }
     );
     if (
-        [...select.options]
-            .some(
-                option =>
-                    option.value ===
-                    previous
-            )
+        manualSelectHasValue(select, previous)
     ) {
         select.value =
             previous;
@@ -4857,12 +4746,7 @@ function populateBillingSelect() {
         }
     );
     if (
-        [...select.options]
-            .some(
-                option =>
-                    option.value ===
-                    previous
-            )
+        manualSelectHasValue(select, previous)
     ) {
         select.value =
             previous;
@@ -4993,24 +4877,19 @@ function renderBillPreview() {
             session.extensions.length >
             0
         ) {
-            extensionText =
-                extensionBilling.items
-                    .map(
-                        item => {
-                            if (
-                                item.prorated
-                            ) {
-                                return (
-                                    `${minutesToHM(item.minutes)} extension ` +
-                                    `(${item.usedMinutes} min used) = \u20B1${item.price}`
-                                );
-                            }
-                            return (
-                                `${minutesToHM(item.minutes)} = \u20B1${item.price}`
-                            );
-                        }
-                    )
-                    .join("<br>");
+            const extensionParts = [];
+            for (let i = 0; i < extensionBilling.items.length; i++) {
+                const item = extensionBilling.items[i];
+                let line = "";
+                if (item.prorated) {
+                    line = `${minutesToHM(item.minutes)} extension ` +
+                        `(${item.usedMinutes} min used) = \u20B1${item.price}`;
+                } else {
+                    line = `${minutesToHM(item.minutes)} = \u20B1${item.price}`;
+                }
+                extensionParts[extensionParts.length] = line;
+            }
+            extensionText = extensionParts.join("<br>");
         }
         else {
             extensionText =
@@ -5384,13 +5263,26 @@ function getCurrentBillData() {
 /* =========================================================
    COMPLETE PAYMENT
 ========================================================= */
+function toggleSplitPayment() {
+    const mode = document.getElementById("paymentMode");
+    const fields = document.getElementById("splitPaymentFields");
+    if (fields) fields.style.display = mode && mode.value === "Split" ? "contents" : "none";
+}
+
 function resetBillingFormState() {
     const amountPaidInput = document.getElementById("amountPaid");
+    const amountPaidInput2 = document.getElementById("amountPaid2");
     const paymentMethodInput = document.getElementById("paymentMethod");
+    const paymentMethodInput2 = document.getElementById("paymentMethod2");
+    const paymentModeInput = document.getElementById("paymentMode");
     const billMsg = document.getElementById("billMsg");
     const receiptActions = document.getElementById("receiptActions");
     if (amountPaidInput) amountPaidInput.value = "";
+    if (amountPaidInput2) amountPaidInput2.value = "";
     if (paymentMethodInput) paymentMethodInput.value = "Cash";
+    if (paymentMethodInput2) paymentMethodInput2.value = "GCash";
+    if (paymentModeInput) paymentModeInput.value = "Single";
+    toggleSplitPayment();
     if (billMsg) {
         billMsg.className = "msg";
         billMsg.innerHTML = "";
@@ -5436,32 +5328,34 @@ function handleCompletePayment() {
     ) {
         return;
     }
-    const paymentMethod =
-        paymentMethodInput.value;
-    const amountPaid =
-        parseFloat(
-            amountPaidInput.value
-        );
-    if (
-        isNaN(amountPaid) ||
-        amountPaid < 0
-    ) {
-        showMsg(
-            "billMsg",
-            "Enter a valid payment amount.",
-            "warn"
-        );
+    const paymentModeInput = document.getElementById("paymentMode");
+    const paymentMethod2Input = document.getElementById("paymentMethod2");
+    const amountPaid2Input = document.getElementById("amountPaid2");
+    const paymentMode = paymentModeInput ? paymentModeInput.value : "Single";
+    const firstAmount = parseFloat(amountPaidInput.value);
+    const secondAmount = paymentMode === "Split" ? parseFloat(amountPaid2Input ? amountPaid2Input.value : "") : 0;
+    if (isNaN(firstAmount) || firstAmount < 0 || (paymentMode === "Split" && (isNaN(secondAmount) || secondAmount < 0))) {
+        showMsg("billMsg", "Enter valid payment amount(s).", "warn");
         return;
     }
-    if (
-        amountPaid <
-        billData.grandTotal
-    ) {
-        showMsg(
-            "billMsg",
-            `Insufficient payment. Total is \u20B1${billData.grandTotal}.`,
-            "error"
-        );
+    const payments = paymentMode === "Split"
+        ? [
+            { method: paymentMethodInput.value, amount: firstAmount },
+            { method: paymentMethod2Input ? paymentMethod2Input.value : "GCash", amount: secondAmount }
+          ]
+        : [{ method: paymentMethodInput.value, amount: firstAmount }];
+    const amountPaid = firstAmount + secondAmount;
+    let paymentMethod = paymentMethodInput.value;
+    if (paymentMode === "Split") {
+        const paymentParts = [];
+        for (let i = 0; i < payments.length; i++) {
+            paymentParts[paymentParts.length] =
+                `${payments[i].method}: ₱${payments[i].amount.toFixed(2)}`;
+        }
+        paymentMethod = paymentParts.join(" + ");
+    }
+    if (amountPaid < billData.grandTotal) {
+        showMsg("billMsg", `Insufficient payment. Combined payment is ₱${amountPaid.toFixed(2)}; total is ₱${Number(billData.grandTotal).toFixed(2)}.`, "error");
         return;
     }
     /* -----------------------------------------
@@ -5534,6 +5428,8 @@ function handleCompletePayment() {
             billData.grandTotal,
         paymentMethod:
             paymentMethod,
+        payments:
+            payments,
         amountPaid:
             amountPaid,
         change:
@@ -5621,6 +5517,7 @@ function handleCompletePayment() {
     }
     amountPaidInput.value =
         "";
+    if (amountPaid2Input) amountPaid2Input.value = "";
     showPaymentChange(transaction);
     renderReceiptActions(
         transaction
@@ -5874,24 +5771,19 @@ function viewTransaction(
             "No extensions";
     }
     else {
-        extensionRows =
-            transaction.extensions
-                .map(
-                    extension => {
-                        if (
-                            extension.prorated
-                        ) {
-                            return (
-                                `${minutesToHM(extension.minutes)} requested, ` +
-                                `${extension.usedMinutes} minute(s) used \u2014 \u20B1${extension.price}`
-                            );
-                        }
-                        return (
-                            `${minutesToHM(extension.minutes)} \u2014 \u20B1${extension.price}`
-                        );
-                    }
-                )
-                .join("<br>");
+        const extensionParts = [];
+        for (let i = 0; i < transaction.extensions.length; i++) {
+            const extension = transaction.extensions[i];
+            let line = "";
+            if (extension.prorated) {
+                line = `${minutesToHM(extension.minutes)} requested, ` +
+                    `${extension.usedMinutes} minute(s) used \u2014 \u20B1${extension.price}`;
+            } else {
+                line = `${minutesToHM(extension.minutes)} \u2014 \u20B1${extension.price}`;
+            }
+            extensionParts[extensionParts.length] = line;
+        }
+        extensionRows = extensionParts.join("<br>");
     }
     detail.innerHTML = `
         <div class="card">
@@ -7388,10 +7280,44 @@ function closeRateSettingsModal(event){
 
 function renderRateSettings(){const b=document.getElementById("billiardRateInput"),k=document.getElementById("ktvRateInput");if(b)b.value=RATE.Billiard;if(k)k.value=RATE.KTV;}
 async function handleSaveRates(){if(!loggedInUser||loggedInUser.role!=="Admin")return;const b=Number(document.getElementById("billiardRateInput").value),k=Number(document.getElementById("ktvRateInput").value);if(b<0||k<0||!Number.isFinite(b)||!Number.isFinite(k)){showMsg("rateSettingsMsg","Enter valid rates.","warn");return;}RATE.Billiard=b;RATE.KTV=k;showMsg("rateSettingsMsg","Rates updated for new reservations and walk-in sessions.","success");renderDashboard();setTimeout(()=>closeRateSettingsModal(),650);}
-function populateRestockRequestSelect(){const s=document.getElementById("restockRequestDrink");if(!s)return;s.innerHTML='<option value="">Select low-stock drink</option>'+manualMap(manualFilter(drinks, d=>d.stock<=5), d=>`<option value="${d.id}">${d.name} — ${d.stock} left</option>`).join("");}
-function handleRestockRequest(){if(!loggedInUser||loggedInUser.role!=="Staff")return;const id=document.getElementById("restockRequestDrink").value,q=parseInt(document.getElementById("restockRequestQty").value),d=manualFind(drinks, x=>x.id===id),note=document.getElementById("restockRequestNote").value.trim();if(!d||!q||q<1){showMsg("restockRequestMsg","Select a low-stock drink and quantity.","warn");return;}if(manualSome(restockRequests, r=>r.drinkId===id&&r.status==="Pending")){showMsg("restockRequestMsg","A pending request already exists.","warn");return;}manualAppend(restockRequests, {id:`RR${String(nextRestockRequestId++).padStart(3,"0")}`,drinkId:id,drinkName:d.name,quantity:q,requestedBy:loggedInUser.name,note,status:"Pending"});showMsg("restockRequestMsg","Restock request sent to admin.","success");renderRestockRequests();}
-function renderRestockRequests(){populateRestockRequestSelect();const b=document.getElementById("restockRequestsBody");if(!b)return;b.innerHTML=restockRequests.length?manualMap(restockRequests, r=>`<tr><td>${r.id}</td><td>${r.drinkName}</td><td>${r.quantity}</td><td>${r.requestedBy}</td><td>${r.note||"—"}</td><td>${r.status}</td><td>${r.status==="Pending"?`<button class="small" onclick="markRestockRequestDone('${r.id}')">Mark Done</button>`:"—"}</td></tr>`).join(""):'<tr><td colspan="7">No restock requests yet.</td></tr>';}
-function markRestockRequestDone(id){if(!loggedInUser||loggedInUser.role!=="Admin")return;const r=manualFind(restockRequests, x=>x.id===id);if(r)r.status="Completed";renderRestockRequests();}
+function populateRestockRequestSelect(){
+    const s=document.getElementById("restockRequestDrink");
+    if(!s)return;
+    s.innerHTML='<option value="">Select drink to request</option>'+manualMap(drinks, d=>`<option value="${d.id}">${d.name} — Stock: ${d.stock}</option>`).join("");
+}
+function handleRestockRequest(){
+    if(!loggedInUser||loggedInUser.role!=="Staff")return;
+    const id=document.getElementById("restockRequestDrink").value;
+    const q=parseInt(document.getElementById("restockRequestQty").value);
+    const d=manualFind(drinks, x=>x.id===id);
+    const note=document.getElementById("restockRequestNote").value.trim();
+    if(!d||!q||q<1){showMsg("restockRequestMsg","Select a drink and enter a valid quantity.","warn");return;}
+    if(manualSome(restockRequests, r=>r.drinkId===id&&r.status==="Pending")){showMsg("restockRequestMsg","A pending request already exists for this drink.","warn");return;}
+    manualAppend(restockRequests, {id:`RR${String(nextRestockRequestId++).padStart(3,"0")}`,drinkId:id,drinkName:d.name,quantity:q,requestedBy:loggedInUser.name,note,status:"Pending"});
+    showMsg("restockRequestMsg","Restock request sent to admin.","success");
+    renderRestockRequests();
+}
+function renderRestockRequests(){
+    populateRestockRequestSelect();
+    const b=document.getElementById("restockRequestsBody");
+    if(!b)return;
+    b.innerHTML=restockRequests.length?manualMap(restockRequests, r=>`<tr><td>${r.id}</td><td>${r.drinkName}</td><td>${r.quantity}</td><td>${r.requestedBy}</td><td>${r.note||"—"}</td><td>${r.status}</td><td>${r.status==="Pending"?`<button class="small" onclick="markRestockRequestDone('${r.id}')">Approve & Restock</button>`:"—"}</td></tr>`).join(""):'<tr><td colspan="7">No restock requests yet.</td></tr>';
+}
+function markRestockRequestDone(id){
+    if(!loggedInUser||loggedInUser.role!=="Admin")return;
+    const r=manualFind(restockRequests, x=>x.id===id);
+    if(!r||r.status!=="Pending")return;
+    const d=manualFind(drinks, x=>x.id===r.drinkId);
+    if(!d)return;
+    d.stock += Number(r.quantity||0);
+    syncDrinkStatus(d);
+    r.status="Completed";
+    r.completedBy=loggedInUser.name;
+    r.completedAt=new Date();
+    renderRestockRequests();
+    renderInventory();
+    populateAllSelects();
+}
 
 /* =========================================================
    CUSTOMER PUBLIC RESERVATION PORTAL
@@ -7485,7 +7411,7 @@ function populateCustomerFacilities() {
             option.textContent = facility.name;
             select.appendChild(option);
         });
-    if ([...select.options].some(option => option.value === previous)) {
+    if (manualSelectHasValue(select, previous)) {
         select.value = previous;
     }
 }
