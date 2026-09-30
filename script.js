@@ -1891,37 +1891,44 @@ function getProratedExtensionBilling(
         );
     const items = [];
     let totalExtensionCost = 0;
-    session.extensions.forEach(
-        extension => {
-            const usedMinutes =
-                Math.min(
-                    extension.minutes,
-                    remainingUsed
-                );
-            remainingUsed -=
-                usedMinutes;
-            const chargedPrice =
-                Math.round(
-                    usedMinutes *
-                    ratePerMinute
-                );
-            manualAppend(items, {
-                minutes:
-                    extension.minutes,
-                fullPrice:
-                    extension.price,
-                usedMinutes:
-                    usedMinutes,
-                price:
-                    chargedPrice,
-                prorated:
-                    usedMinutes <
-                    extension.minutes
-            });
-            totalExtensionCost +=
-                chargedPrice;
-        }
-    );
+    for (
+        let i = 0;
+        i < session.extensions.length;
+        i++
+    ) {
+        const extension =
+            session.extensions[i];
+        const usedMinutes =
+            Math.min(
+                extension.minutes,
+                remainingUsed
+            );
+        remainingUsed -=
+            usedMinutes;
+        const chargedPrice =
+            Math.round(
+                usedMinutes *
+                ratePerMinute
+            );
+        manualAppend(items, {
+            minutes:
+                extension.minutes,
+            fullPrice:
+                extension.price,
+            usedMinutes:
+                usedMinutes,
+            price:
+                chargedPrice,
+            prorated:
+                usedMinutes <
+                extension.minutes,
+            automaticOvertime:
+                false
+        });
+        totalExtensionCost +=
+            chargedPrice;
+    }
+
     return {
         items:
             items,
@@ -1973,6 +1980,46 @@ function getSessionFeeTotal(
 }
 
 /* =========================================================
+   AUTO-END EXPIRED SESSIONS
+   Hard stop at booked time + approved extensions.
+========================================================= */
+function autoEndExpiredSessions() {
+    const now = new Date();
+    let changed = false;
+
+    for (let i = 0; i < facilities.length; i++) {
+        const facilityId = facilities[i].id;
+        const session = sessions[facilityId];
+
+        if (!session || session.actualEnd) {
+            continue;
+        }
+
+        const allowedMinutes =
+            getTotalMinutes(session);
+        const expectedEnd =
+            new Date(
+                session.actualStart.getTime()
+                + allowedMinutes * 60000
+            );
+
+        if (now.getTime() >= expectedEnd.getTime()) {
+            /* Use the exact scheduled cutoff, not the delayed
+               browser tick time, so billing cannot include
+               accidental overtime. */
+            session.actualEnd = expectedEnd;
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        populateAllSelects();
+        populateBillingSelect();
+        renderBillPreview();
+    }
+}
+
+/* =========================================================
    HOME DASHBOARD
 ========================================================= */
 function getFacilityIcon(
@@ -2014,6 +2061,7 @@ function getFacilityIcon(
 }
 
 function renderDashboard() {
+    autoEndExpiredSessions();
     const grid =
         document.getElementById(
             "dashboardGrid"
@@ -4815,10 +4863,15 @@ function renderBillPreview() {
                     60000
                 )
             );
+        const billableMinutes =
+            Math.min(
+                actualMinutes,
+                getTotalMinutes(session)
+            );
         const extensionBilling =
             getProratedExtensionBilling(
                 session,
-                actualMinutes
+                billableMinutes
             );
         const sessionFee =
             session.baseSessionPrice
@@ -4874,14 +4927,16 @@ function renderBillPreview() {
         let extensionText =
             "";
         if (
-            session.extensions.length >
+            extensionBilling.items.length >
             0
         ) {
             const extensionParts = [];
             for (let i = 0; i < extensionBilling.items.length; i++) {
                 const item = extensionBilling.items[i];
                 let line = "";
-                if (item.prorated) {
+                if (item.automaticOvertime) {
+                    line = `Automatic overtime: ${minutesToHM(item.usedMinutes)} = \u20B1${item.price}`;
+                } else if (item.prorated) {
                     line = `${minutesToHM(item.minutes)} extension ` +
                         `(${item.usedMinutes} min used) = \u20B1${item.price}`;
                 } else {
