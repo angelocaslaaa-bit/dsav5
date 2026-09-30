@@ -1330,7 +1330,7 @@
 
                 <div class="card adminOnly">
 
-                    <h3>Restock / Edit Drink</h3>
+                    <h3>Edit Drink</h3>
 
                     <div class="row editDrinkGrid">
 
@@ -1351,7 +1351,7 @@
                         </div>
 
                         <div class="fieldGroup">
-                            <input type="number" id="editDrinkStock" aria-label="Stock quantity" placeholder="Enter new stock quantity" min="0">
+                            <input type="number" id="editDrinkStock" aria-label="Current stock" placeholder="Current stock" min="0" readonly>
                         </div>
                         <div class="fieldGroup snackConditional" id="editSnackGroup" style="display:none;">
                             <select id="editDrinkSnacks" aria-label="Free Snack Choice"></select>
@@ -1381,7 +1381,7 @@
 
 
 
-<div class="card staffOnly"><h3>Restock Request</h3><div class="algo">Request restocking for low-stock items.</div><div class="restockRequestGrid"><select id="restockRequestDrink"></select><input type="number" id="restockRequestQty" min="1" value="1"><textarea id="restockRequestNote" placeholder="Optional note for admin"></textarea><button onclick="handleRestockRequest()">Request Restock</button></div><div id="restockRequestMsg" class="msg"></div></div><div class="card adminOnly"><h3>Staff Restock Requests</h3><div class="tableWrap"><table><thead><tr><th>ID</th><th>Drink</th><th>Qty</th><th>Requested By</th><th>Note</th><th>Status</th><th>Action</th></tr></thead><tbody id="restockRequestsBody"></tbody></table></div></div>
+<div class="card staffOnly"><h3>Restock Request</h3><div class="algo">Request restocking for any drink before stock is added.</div><div class="restockRequestGrid"><select id="restockRequestDrink"></select><input type="number" id="restockRequestQty" min="1" value="1"><textarea id="restockRequestNote" placeholder="Optional note for admin"></textarea><button onclick="handleRestockRequest()">Request Restock</button></div><div id="restockRequestMsg" class="msg"></div></div><div class="card adminOnly"><h3>Staff Restock Requests</h3><div class="tableWrap"><table><thead><tr><th>ID</th><th>Drink</th><th>Qty</th><th>Requested By</th><th>Note</th><th>Status</th><th>Action</th></tr></thead><tbody id="restockRequestsBody"></tbody></table></div></div>
 <!-- INVENTORY LIST -->
 
                 <div class="inventoryHeader">
@@ -1500,43 +1500,26 @@
 
 
 
-                    <div class="row">
-
-                        <select id="paymentMethod">
-
-                            <option value="Cash">
-
-                                Cash
-
-                            </option>
-
-                            <option value="GCash">
-
-                                GCash
-
-                            </option>
-
+                    <div class="row billingPaymentRow">
+                        <select id="paymentMode" onchange="toggleSplitPayment()">
+                            <option value="Single">Single Payment</option>
+                            <option value="Split">Split Payment</option>
                         </select>
 
+                        <select id="paymentMethod">
+                            <option value="Cash">Cash</option>
+                            <option value="GCash">GCash</option>
+                        </select>
 
+                        <input type="number" id="amountPaid" placeholder="Amount Paid" min="0" step="0.01">
 
-
-
-                        <input
-
-                            type="number"
-
-                            id="amountPaid"
-
-                            placeholder="Amount Paid"
-
-                            min="0"
-
-                        >
-
-
-
-
+                        <div id="splitPaymentFields" class="splitPaymentFields" style="display:none;">
+                            <select id="paymentMethod2">
+                                <option value="GCash">GCash</option>
+                                <option value="Cash">Cash</option>
+                            </select>
+                            <input type="number" id="amountPaid2" placeholder="Second Payment Amount" min="0" step="0.01">
+                        </div>
 
                         <button onclick="handleCompletePayment()">
 
